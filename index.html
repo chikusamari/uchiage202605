@@ -225,7 +225,7 @@ function renderPfood(){
       <button class="btn btn-p" style="margin-top:12px" onclick="goFood()">次へ →</button>
     </div>`;
 }
-function togG(g){const i=p.genres.indexOf(g);if(i>=0)p.genres.splice(i,1);else p.genres.push(g);renderPfood();}
+function togG(g){p.dislikes=document.getElementById('dis')?.value??p.dislikes;const i=p.genres.indexOf(g);if(i>=0)p.genres.splice(i,1);else p.genres.push(g);renderPfood();}
 function goFood(){p.dislikes=document.getElementById('dis').value;go('pcomment');}
 
 function renderPcomment(){
@@ -271,7 +271,10 @@ function renderResult(){
       const col=v==='○'?'#16a34a':v==='△'?'#ca8a04':v==='✗'?'#dc2626':'#ccc';
       return `<td style="text-align:center;padding:8px 4px;font-size:16px;color:${col}">${v}</td>`;
     }).join('');
-    return `<tr><td style="padding:8px 6px;font-size:12px;font-weight:600;white-space:nowrap">${n}</td>${cells}</tr>`;
+    return `<tr><td style="padding:6px 6px;font-size:12px;font-weight:600;white-space:nowrap">
+      <div style="display:flex;align-items:center;gap:5px">${n}
+        <button onclick="editPerson(this)" data-name="${n}" style="font-size:10px;padding:2px 7px;border:1px solid #d0d0cc;border-radius:6px;background:transparent;cursor:pointer;color:#888">✏</button>
+      </div></td>${cells}</tr>`;
   }).join(''):`<tr><td colspan="${dates.length+1}" style="padding:16px;text-align:center;color:#888;font-size:13px">まだ回答がありません</td></tr>`;
 
   const tots=dates.map(d=>{
@@ -331,6 +334,13 @@ function renderResult(){
       <p style="font-size:14px;font-weight:600;margin-bottom:10px">💬 みんなのコメント</p>
       ${cmtHtml}
     </div>`;
+}
+
+function editPerson(btn){
+  const name=btn.getAttribute("data-name");
+  const r=res[name];
+  p={name,dates:{...r.dates},genres:[...r.genres],dislikes:r.dislikes||"",comment:r.comment||""};
+  go("pdates");
 }
 
 load();
