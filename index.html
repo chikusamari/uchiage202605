@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cyteki 打ち上げ調整</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#f5f5f3;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;color:#1a1a1a;min-height:100vh;}
+.app{max-width:600px;margin:0 auto;padding:1.5rem 1rem;}
+.card{background:#fff;border:1px solid #e5e5e2;border-radius:14px;padding:1.25rem;margin-bottom:1rem;box-shadow:0 1px 4px rgba(0,0,0,.04);}
+.btn{display:block;width:100%;padding:12px 16px;border:1px solid #d0d0cc;border-radius:10px;background:transparent;font-size:14px;font-weight:500;color:#1a1a1a;cursor:pointer;text-align:center;margin-bottom:8px;font-family:inherit;transition:background .15s;}
+.btn:hover{background:#f0f0ee;}
+.btn:active{transform:scale(0.98);}
+.btn-p{background:#1a56db;color:#fff;border-color:#1a56db;}
+.btn-p:hover{background:#1648c0;border-color:#1648c0;}
+.btn-sm{display:inline-block;width:auto;padding:7px 14px;font-size:13px;}
+.lbl{font-size:12px;color:#888;margin-bottom:5px;}
+.vote-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid #e5e5e2;border-radius:10px;margin-bottom:8px;background:#fff;}
+.vd{flex:1;font-size:13px;color:#1a1a1a;}
+.vb{width:44px;height:38px;border:1px solid #d0d0cc;border-radius:9px;background:transparent;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:background .12s;}
+.vb:hover{background:#f0f0ee;}
+.vb.maru{background:#dcfce7;border-color:#86efac;}
+.vb.sankaku{background:#fef9c3;border-color:#fde047;}
+.vb.batsu{background:#fee2e2;border-color:#fca5a5;}
+.gg{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px;}
+.gb{padding:9px 10px;border:1px solid #d0d0cc;border-radius:10px;background:transparent;font-size:13px;cursor:pointer;text-align:center;color:#1a1a1a;font-family:inherit;transition:background .12s;}
+.gb:hover{background:#f0f0ee;}
+.gb.sel{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8;}
+.steps{display:flex;align-items:center;gap:6px;margin-bottom:1.25rem;}
+.sd{width:8px;height:8px;border-radius:50%;background:#d0d0cc;}
+.sd.on{background:#1a56db;}
+.sd.dn{background:#22c55e;}
+.bar-wrap{flex:1;background:#f0f0ee;border-radius:4px;height:16px;overflow:hidden;}
+.bar-fill{height:100%;background:#93c5fd;border-radius:4px;}
+.comment-bubble{background:#f8f8f6;border-radius:10px;padding:10px 13px;margin-bottom:8px;}
+.comment-name{font-size:11px;font-weight:600;color:#888;margin-bottom:4px;}
+.comment-text{font-size:13px;color:#1a1a1a;line-height:1.65;}
+input[type=text],input[type=password],input[type=date]{width:100%;padding:10px 12px;border:1px solid #d0d0cc;border-radius:9px;font-size:14px;font-family:inherit;background:#fff;color:#1a1a1a;outline:none;transition:border .15s;}
+input[type=text]:focus,input[type=password]:focus,input[type=date]:focus{border-color:#1a56db;}
+textarea{width:100%;padding:10px 12px;border:1px solid #d0d0cc;border-radius:9px;font-size:14px;font-family:inherit;background:#fff;color:#1a1a1a;outline:none;resize:vertical;transition:border .15s;}
+textarea:focus{border-color:#1a56db;}
+</style>
+</head>
+<body>
+<div id="app" class="app"></div>
+<script>
+const CK='cyteki_cfg', RK='cyteki_res';
+const GENRES=['和食','焼肉・ホルモン','寿司・海鮮','中華料理','イタリアン・洋食','居酒屋・焼き鳥','鍋料理','ステーキ・肉料理','アジア・エスニック','韓国料理','ラーメン・麺類','カフェ・ビストロ'];
+let cfg=null, res={}, scr='home', p={name:'',dates:{},genres:[],dislikes:'',comment:''}, tmpDates=null;
+const app=document.getElementById('app');
+
+function load(){
+  try{const c=localStorage.getItem(CK);if(c)cfg=JSON.parse(c);}catch{}
+  try{const r=localStorage.getItem(RK);if(r)res=JSON.parse(r);}catch{}
+  render();
+}
+function saveCfg(){try{localStorage.setItem(CK,JSON.stringify(cfg));}catch{}}
+function saveRes(){try{localStorage.setItem(RK,JSON.stringify(res));}catch{}}
+function go(s){scr=s;tmpDates=null;render();}
+
+function stepDots(cur){
+  return `<div class="steps">${[1,2,3,4].map(i=>`<div class="sd ${i<cur?'dn':i===cur?'on':''}"></div>`).join('')}<span style="font-size:12px;color:#888;margin-left:2px">STEP ${cur}/4</span></div>`;
+}
+function fmtD(d){
+  const dt=new Date(d+'T00:00:00');
+  const dy=['日','月','火','水','木','金','土'];
+  return `${dt.getMonth()+1}月${dt.getDate()}日（${dy[dt.getDay()]}）`;
+}
+function fmtDs(d){
+  const dt=new Date(d+'T00:00:00');
+  const dy=['日','月','火','水','木','金','土'];
+  return `${dt.getMonth()+1}/${dt.getDate()}<br><span style="font-size:10px">${dy[dt.getDay()]}</span>`;
+}
+
+function render(){
+  ({home:renderHome,alog:renderAlog,aset:renderAset,pname:renderPname,pdates:renderPdates,pfood:renderPfood,pcomment:renderPcomment,pdone:renderPdone,result:renderResult}[scr]||renderHome)();
+}
+
+function renderHome(){
+  app.innerHTML=`
+    <div style="text-align:center;padding:2.5rem 0 1.25rem">
+      <div style="font-size:32px;margin-bottom:10px">🎉</div>
+      <p style="font-size:22px;font-weight:600;margin-bottom:6px">${cfg?.eventTitle||'打ち上げ調整'}</p>
+      <p style="font-size:13px;color:#888">Cyteki チーム</p>
+    </div>
+    <div class="card">
+      <button class="btn btn-p" onclick="startP()">✏ 希望を入力する</button>
+      <button class="btn" onclick="go('result')">📊 みんなの結果を見る</button>
+      <button class="btn" style="font-size:12px;color:#aaa" onclick="startAdmin()">⚙ 管理者設定</button>
+    </div>`;
+}
+
+function startP(){
+  if(!cfg?.dates?.length){alert('先に管理者が日程候補を設定してください');return;}
+  p={name:'',dates:{},genres:[],dislikes:'',comment:''};
+  go('pname');
+}
+function startAdmin(){if(cfg?.adminPass)go('alog');else go('aset');}
+
+function renderAlog(){
+  app.innerHTML=`
+    <button class="btn btn-sm" style="margin-bottom:1rem" onclick="go('home')">← 戻る</button>
+    <div class="card">
+      <p style="font-size:16px;font-weight:600;margin-bottom:1rem">管理者ログイン</p>
+      <p class="lbl">パスワード</p>
+      <input type="password" id="pw" style="margin-bottom:10px" placeholder="パスワードを入力" />
+      <button class="btn btn-p" onclick="checkPw()">ログイン</button>
+      <p id="perr" style="color:#ef4444;font-size:12px;margin-top:6px;display:none">パスワードが違います</p>
+    </div>`;
+}
+function checkPw(){
+  if(document.getElementById('pw').value===cfg.adminPass)go('aset');
+  else document.getElementById('perr').style.display='block';
+}
+
+function renderAset(){
+  const dates=(tmpDates||(cfg?.dates||['','',''])).slice();
+  const dHtml=dates.map((d,i)=>`
+    <div style="display:flex;gap:7px;margin-bottom:7px">
+      <input type="date" id="di${i}" value="${d}" style="flex:1;width:auto" />
+      <button onclick="rmDate(${i})" style="padding:0 12px;border:1px solid #d0d0cc;border-radius:9px;background:transparent;cursor:pointer;color:#888;font-size:16px">✕</button>
+    </div>`).join('');
+  app.innerHTML=`
+    <button class="btn btn-sm" style="margin-bottom:1rem" onclick="go('home')">← ホームへ</button>
+    <div class="card">
+      <p style="font-size:16px;font-weight:600;margin-bottom:1rem">管理者設定</p>
+      <p class="lbl">イベント名</p>
+      <input type="text" id="etitle" value="${cfg?.eventTitle||''}" placeholder="例: Cyteki 打ち上げ" style="margin-bottom:1rem" />
+      <p class="lbl">${cfg?.adminPass?'パスワード変更（空欄なら変更なし）':'管理者パスワード（初回設定）'}</p>
+      <input type="password" id="npw" placeholder="${cfg?.adminPass?'新しいパスワード':'パスワードを設定'}" style="margin-bottom:1rem" />
+      <p class="lbl">日程候補</p>
+      <div id="dc">${dHtml}</div>
+      <button class="btn" style="margin-top:4px" onclick="addDate()">＋ 日程を追加</button>
+      <hr style="border:none;border-top:1px solid #e5e5e2;margin:1rem 0" />
+      <button class="btn btn-p" onclick="saveAdmin()">保存する</button>
+      ${cfg?`<button class="btn" style="font-size:12px;color:#ef4444;margin-top:4px" onclick="resetAll()">⚠ 全回答をリセット</button>`:''}
+    </div>`;
+}
+
+function collectDates(){
+  if(!tmpDates)tmpDates=(cfg?.dates||[]).slice();
+  document.querySelectorAll('[id^="di"]').forEach((el,i)=>{if(tmpDates[i]!==undefined)tmpDates[i]=el.value;});
+}
+function addDate(){collectDates();tmpDates.push('');renderAset();}
+function rmDate(i){collectDates();tmpDates.splice(i,1);renderAset();}
+
+function saveAdmin(){
+  collectDates();
+  const title=document.getElementById('etitle').value.trim();
+  const pw=document.getElementById('npw').value;
+  const dates=(tmpDates||[]).filter(d=>d!=='').sort();
+  if(!title){alert('イベント名を入力してください');return;}
+  if(!cfg?.adminPass&&!pw){alert('パスワードを設定してください');return;}
+  if(!dates.length){alert('日程候補を1件以上入力してください');return;}
+  cfg={eventTitle:title,adminPass:pw||cfg?.adminPass||'',dates};
+  tmpDates=null;
+  saveCfg();
+  alert('保存しました！');
+  go('home');
+}
+function resetAll(){
+  if(!confirm('全参加者の回答を削除しますか？'))return;
+  res={};saveRes();alert('リセットしました');
+}
+
+function renderPname(){
+  const names=Object.keys(res);
+  app.innerHTML=`
+    <button class="btn btn-sm" style="margin-bottom:1rem" onclick="go('home')">← 戻る</button>
+    ${stepDots(1)}
+    <div class="card">
+      <p style="font-size:16px;font-weight:600;margin-bottom:4px">あなたのお名前は？</p>
+      <p style="font-size:13px;color:#888;margin-bottom:1rem">参加者として回答します</p>
+      <input type="text" id="pn" placeholder="例: 田中 太郎" style="margin-bottom:12px" />
+      ${names.length?`<div style="margin-bottom:12px"><p class="lbl">回答済み（${names.length}名）</p><div style="display:flex;flex-wrap:wrap;gap:5px">${names.map(n=>`<span style="font-size:11px;background:#f0f0ee;padding:3px 10px;border-radius:100px;color:#888">${n}</span>`).join('')}</div></div>`:''}
+      <button class="btn btn-p" onclick="subName()">次へ →</button>
+    </div>`;
+}
+function subName(){
+  const name=document.getElementById('pn').value.trim();
+  if(!name){alert('名前を入力してください');return;}
+  p.name=name;
+  if(res[name]){
+    if(!confirm(`「${name}」さんはすでに回答済みです。上書きしますか？`))return;
+    p.dates={...res[name].dates};p.genres=[...res[name].genres];
+    p.dislikes=res[name].dislikes||'';p.comment=res[name].comment||'';
+  }
+  go('pdates');
+}
+
+function renderPdates(){
+  const rows=cfg.dates.map(d=>{
+    const v=p.dates[d]||'';
+    return `<div class="vote-row">
+      <div class="vd">${fmtD(d)}</div>
+      <button class="vb ${v==='○'?'maru':''}" onclick="setV('${d}','○')">○</button>
+      <button class="vb ${v==='△'?'sankaku':''}" onclick="setV('${d}','△')">△</button>
+      <button class="vb ${v==='✗'?'batsu':''}" onclick="setV('${d}','✗')">✗</button>
+    </div>`;
+  }).join('');
+  app.innerHTML=`
+    <button class="btn btn-sm" style="margin-bottom:1rem" onclick="go('pname')">← 戻る</button>
+    ${stepDots(2)}
+    <div class="card">
+      <p style="font-size:16px;font-weight:600;margin-bottom:4px">日程を教えてください</p>
+      <p style="font-size:12px;color:#888;margin-bottom:1rem">○ 参加できる ／ △ たぶん ／ ✗ 無理</p>
+      ${rows}
+      <button class="btn btn-p" style="margin-top:8px" onclick="go('pfood')">次へ →</button>
+    </div>`;
+}
+function setV(d,v){p.dates[d]=v;renderPdates();}
+
+function renderPfood(){
+  const gHtml=GENRES.map(g=>`<button class="gb ${p.genres.includes(g)?'sel':''}" onclick="togG('${g}')">${g}</button>`).join('');
+  app.innerHTML=`
+    <button class="btn btn-sm" style="margin-bottom:1rem" onclick="go('pdates')">← 戻る</button>
+    ${stepDots(3)}
+    <div class="card">
+      <p style="font-size:16px;font-weight:600;margin-bottom:4px">食事の希望</p>
+      <p class="lbl" style="margin-bottom:9px">食べたいジャンルを選んでください（複数可）</p>
+      <div class="gg">${gHtml}</div>
+      <p class="lbl" style="margin-top:1.25rem;margin-bottom:5px">苦手・嫌いなもの（任意）</p>
+      <textarea id="dis" style="height:72px" placeholder="例: パクチー、レバー、辛いもの">${p.dislikes}</textarea>
+      <button class="btn btn-p" style="margin-top:12px" onclick="goFood()">次へ →</button>
+    </div>`;
+}
+function togG(g){const i=p.genres.indexOf(g);if(i>=0)p.genres.splice(i,1);else p.genres.push(g);renderPfood();}
+function goFood(){p.dislikes=document.getElementById('dis').value;go('pcomment');}
+
+function renderPcomment(){
+  app.innerHTML=`
+    <button class="btn btn-sm" style="margin-bottom:1rem" onclick="go('pfood')">← 戻る</button>
+    ${stepDots(4)}
+    <div class="card">
+      <p style="font-size:16px;font-weight:600;margin-bottom:4px">一言コメント</p>
+      <p style="font-size:13px;color:#888;margin-bottom:1rem">みんなへのメッセージや希望を自由に書いてください（任意）</p>
+      <textarea id="cmt" style="height:110px;line-height:1.65" placeholder="例：個室があるとうれしいです！夜景が見えるお店とか行ってみたいな〜">${p.comment}</textarea>
+      <button class="btn btn-p" style="margin-top:12px" onclick="subP()">回答を送信する 🎉</button>
+    </div>`;
+}
+
+function subP(){
+  p.comment=document.getElementById('cmt').value;
+  res[p.name]={dates:{...p.dates},genres:[...p.genres],dislikes:p.dislikes,comment:p.comment};
+  saveRes();
+  go('pdone');
+}
+
+function renderPdone(){
+  app.innerHTML=`
+    <div style="text-align:center;padding:3rem 1rem">
+      <div style="font-size:42px;margin-bottom:14px">🎊</div>
+      <p style="font-size:18px;font-weight:600;margin-bottom:6px">ありがとうございます！</p>
+      <p style="font-size:13px;color:#888;margin-bottom:1.5rem">${p.name}さんの回答を保存しました</p>
+      <button class="btn btn-p" onclick="go('result')">📊 結果を見る</button>
+      <button class="btn" style="margin-top:4px" onclick="go('home')">ホームへ</button>
+    </div>`;
+}
+
+function renderResult(){
+  if(!cfg){
+    app.innerHTML=`<button class="btn btn-sm" style="margin-bottom:1rem" onclick="go('home')">← 戻る</button><p style="color:#888;text-align:center;padding:2rem">まだ設定がありません</p>`;
+    return;
+  }
+  const names=Object.keys(res),dates=cfg.dates;
+  const dHd=dates.map(d=>`<th style="padding:6px 4px;font-size:11px;font-weight:500;color:#888;text-align:center;min-width:52px">${fmtDs(d)}</th>`).join('');
+  const rows=names.length?names.map(n=>{
+    const cells=dates.map(d=>{
+      const v=res[n].dates[d]||'－';
+      const col=v==='○'?'#16a34a':v==='△'?'#ca8a04':v==='✗'?'#dc2626':'#ccc';
+      return `<td style="text-align:center;padding:8px 4px;font-size:16px;color:${col}">${v}</td>`;
+    }).join('');
+    return `<tr><td style="padding:8px 6px;font-size:12px;font-weight:600;white-space:nowrap">${n}</td>${cells}</tr>`;
+  }).join(''):`<tr><td colspan="${dates.length+1}" style="padding:16px;text-align:center;color:#888;font-size:13px">まだ回答がありません</td></tr>`;
+
+  const tots=dates.map(d=>{
+    const ma=names.filter(n=>res[n].dates[d]==='○').length;
+    const sa=names.filter(n=>res[n].dates[d]==='△').length;
+    return `<td style="text-align:center;padding:5px 4px;font-size:11px;color:#888">○${ma} △${sa}</td>`;
+  }).join('');
+
+  const gc={};
+  names.forEach(n=>(res[n].genres||[]).forEach(g=>{gc[g]=(gc[g]||0)+1;}));
+  const sg=Object.entries(gc).sort((a,b)=>b[1]-a[1]);
+  const mx=sg[0]?.[1]||1;
+  const gHtml=sg.length?sg.map(([g,c])=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="font-size:12px;min-width:108px">${g}</div>
+      <div class="bar-wrap"><div class="bar-fill" style="width:${Math.round(c/mx*100)}%"></div></div>
+      <div style="font-size:12px;font-weight:600;color:#1a56db;min-width:28px">${c}人</div>
+    </div>`).join(''):`<p style="font-size:13px;color:#888">まだ回答がありません</p>`;
+
+  const diHtml=names.filter(n=>res[n].dislikes).map(n=>`
+    <div style="padding:7px 0;border-bottom:1px solid #e5e5e2">
+      <span style="font-size:11px;font-weight:600;color:#888">${n}：</span>
+      <span style="font-size:13px">${res[n].dislikes}</span>
+    </div>`).join('')||`<p style="font-size:13px;color:#888">特になし</p>`;
+
+  const cmtHtml=names.filter(n=>res[n].comment).map(n=>`
+    <div class="comment-bubble">
+      <div class="comment-name">${n}</div>
+      <div class="comment-text">${res[n].comment.replace(/\n/g,'<br>')}</div>
+    </div>`).join('')||`<p style="font-size:13px;color:#888">まだコメントがありません</p>`;
+
+  app.innerHTML=`
+    <button class="btn btn-sm" style="margin-bottom:1rem" onclick="go('home')">← 戻る</button>
+    <p style="font-size:20px;font-weight:600;margin-bottom:4px">結果まとめ</p>
+    <p style="font-size:13px;color:#888;margin-bottom:1rem">${cfg.eventTitle} · ${names.length}名回答済み</p>
+    <div class="card">
+      <p style="font-size:14px;font-weight:600;margin-bottom:10px">📅 日程</p>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th style="padding:6px;font-size:11px;font-weight:500;color:#888;text-align:left;width:70px">名前</th>${dHd}</tr></thead>
+          <tbody>
+            ${rows}
+            ${names.length?`<tr style="border-top:1px solid #e5e5e2"><td style="font-size:11px;padding:5px 6px;color:#888">集計</td>${tots}</tr>`:''}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:14px;font-weight:600;margin-bottom:10px">🍽 食べたいジャンル</p>
+      ${gHtml}
+    </div>
+    <div class="card">
+      <p style="font-size:14px;font-weight:600;margin-bottom:8px">⚠ 苦手なもの</p>
+      ${diHtml}
+    </div>
+    <div class="card">
+      <p style="font-size:14px;font-weight:600;margin-bottom:10px">💬 みんなのコメント</p>
+      ${cmtHtml}
+    </div>`;
+}
+
+load();
+</script>
+</body>
+</html>
